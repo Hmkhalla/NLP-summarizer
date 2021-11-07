@@ -102,6 +102,30 @@ class IntraDecoderAttention(nn.Module):
 
         return ct_d, prev_h_dec
 
+class TokenGeneration(nn.Module):
+    def __init__(self):
+        super(TokenGeneration, self).__init__()
+        # TO DO share weigths #
+        self.lin_out = nn.Linear(3*config.hidden_dim, config.vocab_size)
+        self.lin_u = nn.Linear(3*config.hidden_dim, 1)
+
+
+    def forward(self, h_dec, ct_e, ct_d, enc_batch_extend_vocab):
+        hidden_states = torch.cat([h_dec, ct_e, ct_d], 1)
+        p_u = torch.sigmoid(self.lin_u(hidden_states)) # bs,1
+
+
+        vocab_dist = F.softmax(self.lin_out(hidden_states), dim=1)
+        vocab_dist = p_u * vocab_dist
+
+        attn_dist = ct_e
+        attn_dist = (1 - p_u) * attn_dist
+
+        final_dist = vocab_dist.scatter_add(1, enc_batch_extend_vocab, attn_dist)
+
+        return final_dist
+
+
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
