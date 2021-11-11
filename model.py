@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from train_util import get_cuda
 
 
-embedding = nn.Embedding(config.vocab_size, config.emb_dim)
 
 class EncoderRNN(nn.Module):
     def __init__(self, input_size=None, emb_dim=None, hidden_dim=None):
@@ -19,17 +18,16 @@ class EncoderRNN(nn.Module):
         self.emb_dim = emb_dim if emb_dim != None else config.emb_dim
         ### END TO DO ###
 
-        self.embedding = embedding
         self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=1, batch_first=True, bidirectional=True)
 
-    def forward(self, input, hidden):
+    def forward(self, embedded):
         ''' Perform word embedding and forward rnn
         :param input: word_id in sequence (batch_size, max_enc_steps)
+        :param embedded: word_vectors (batch_size, max_enc_steps, emb_dim)
 
         :returns h_enc_seq: hidden encoding states for all sentence (batch_size, max_enc_steps, 2*hidden_dim)
         :returns hidden : Tuple containing final hidden state & cell state of encoder. Shape of h & c: (batch_size, 2*hidden_dim)
         '''
-        embedded = self.embedding(input)
         h_enc_seq, hidden = self.lstm(embedded)
 
         h, c = hidden  # shape of h: 2, bs, n_hid
@@ -114,33 +112,76 @@ class TokenGeneration(nn.Module):
     def __init__(self):
         super(TokenGeneration, self).__init__()
         # TO DO share weigths #
-        self.lin_out = nn.Linear(3*config.hidden_dim, config.vocab_size)
-        self.lin_u = nn.Linear(3*config.hidden_dim, 1)
+        self.lin_out = nn.Linear(3*2*config.hidden_dim, config.vocab_size)
+        self.lin_u = nn.Linear(3*2*config.hidden_dim, 1)
 
 
-    def forward(self, h_dec, ct_e, ct_d, enc_batch_extend_vocab):
-        hidden_states = torch.cat([h_dec, ct_e, ct_d], 1)
+    def forward(self, h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab):
+        ''' Perform TOKEN GENERATION AND POINTER
+        :param h_d_t: decoder hidden state at current time step (batch_size, 2*hidden_dim)
+        :param ct_e: encoder context vector for decoding_step (eq 5 in https://arxiv.org/pdf/1705.04304.pdf) (batch_size, 2*hidden_dim)
+        :param ct_d: decoder context vector for decoding_step (batch_size, 2*hidden_dim)
+        :param alphat_e: normalized encoder attention score (batch_size, max_enc_steps)
+        :param enc_batch_extend_vocab: Input batch that stores OOV ids (batch_size, max_enc_steps)
+
+        :returns final_dist: final output distribution including OOV (batch_size, vocab_size + max OOV_nb)
+        '''
+
+        hidden_states = torch.cat([h_d_t, ct_e, ct_d], dim=1)
         p_u = torch.sigmoid(self.lin_u(hidden_states)) # bs,1
-
 
         vocab_dist = F.softmax(self.lin_out(hidden_states), dim=1)
         vocab_dist = p_u * vocab_dist
 
-        attn_dist = ct_e
+        attn_dist = alphat_e
         attn_dist = (1 - p_u) * attn_dist
 
+        ## TO DO adding OOVs in final_dist
         final_dist = vocab_dist.scatter_add(1, enc_batch_extend_vocab, attn_dist)
 
         return final_dist
 
 
-class Decoder(nn.Module):
+class DecoderRNN(nn.Module):
     def __init__(self):
-        super(Decoder, self).__init__()
+        super(DecoderRNN, self).__init__()
 
-        self.embedding = embedding
+        self.lstm = nn.LSTMCell(config.emb_dim, 2*config.hidden_dim, batch_first=True)
 
-        self.lstm = nn.LSTM(config.emb_dim, config.hidden_dim)
+    def forward(self, embedded, h_enc):
+        h_d_t, cell_t = self.lstm(embedded, h_enc)
+        return h_d_t, cell_t
 
-    def forward(self):
-        return
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+
+        self.embedding = nn.Embedding(config.vocab_size, config.emb_dim)
+        self.encoder = EncoderRNN()
+        self.decoder = DecoderRNN()
+        self.enc_attention = IntraTemporalAttention()
+        self.dec_attention = IntraDecoderAttention()
+        self.token_gen = TokenGeneration()
+
+        self.start_id = self.vocab.word2id(data.START_DECODING)
+        self.unk_id = self.vocab.word2id(data.UNKNOWN_TOKEN)
+        self.pad_id = self.vocab.word2id(data.PAD_TOKEN)
+
+    def forward(self, input):
+        input_embedded = self.embedding(input)
+        h_enc, hidden_e = self.encoder(input_embedded)
+        output_embedded = self.embedding(self.start_id)
+        hidden_d = hidden_e
+        enc_padding_mask = get_cuda(torch.ones_like(input_embedded))
+        enc_padding_mask[input_embedded==self.pad_id] = 0
+        sum_exp_att = None
+        prev_h_dec = None
+        resume = torch.zeros(config.batch_size, config.max_dec_steps)
+        for t in range(config.max_dec_steps):
+            h_d_t, cell_d_t = self.decoder(output_embedded, hidden_d)
+            ct_e, alphat_e, sum_exp_att = self.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
+            ct_d, prev_h_dec = self.dec_attention(h_d_t, prev_h_dec)
+            final_dist = self.token_gen(h_d_t, ct_e, ct_d, alphat_e, input_embedded)
+            # TO DO ID generation #
+            # resume[:, t] = ...
+        return resume
