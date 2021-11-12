@@ -1,99 +1,36 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[2]:
-
-
-import pandas as pd
-import matplotlib.pyplot as plt
-#%matplotlib notebook
-import numpy as np
-import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
-import re  # For preprocessing
-import pandas as pd  # For data handling
-from time import time  # To time our operations
-from collections import defaultdict  # For word frequency
-
-import spacy  # For preprocessing
 import logging  # Setting up the loggings to monitor gensim
 logging.basicConfig(format="%(levelname)s - %(asctime)s: %(message)s", datefmt= '%H:%M:%S', level=logging.INFO)
-from sklearn.manifold import TSNE
-from numpy import dot
-from numpy.linalg import norm
 from nltk.tokenize import word_tokenize ,sent_tokenize
-
 from collections import Counter
-
 from keras.preprocessing.sequence import pad_sequences
-
-import tensorflow as tf
 
 from __future__ import unicode_literals, print_function, division
 from io import open
-import unicodedata
-import string
-import re
-import random
 
 import torch
-import torch.nn as nn
-from torch import optim
-import torch.nn.functional as F
 
-from tqdm import tqdm
 
+
+"""
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-# ### I. Import dataset 
-
-# In[3]:
-
-
 from datasets import load_dataset
 dataset = load_dataset('cnn_dailymail', '3.0.0')
-
-
-# In[4]:
-
-
 train = dataset['train']
 val = dataset['validation']
-
-
-# In[5]:
-
-
 article_train = train['article']
 resume_train = train['highlights']
 idi_train = train['id']
-
-
 article_val = val['article']
 resume_val = val['highlights']
 idi_val = val['id']
-
-
-# In[6]:
-
-
 article =article_train + article_val
 resume = resume_train + resume_val
-
-
-# In[7]:
-
-
 article = article[:1000]
 resume = resume[:1000]
-
-
-# In[8]:
-
-
 vocab_size = 200000
+"""
 
 class Makedata:
         
@@ -118,13 +55,16 @@ class Makedata:
                     count+=1
         return 
         
-
+START_DECODING = "[SOS]"
+STOP_DECODING =  "[EOS]"
+PAD_TOKEN = "[PAD]"
+UNKNOWN_TOKEN = "[UNK]"
 
 class Vocab:
-    def __init__(self, vocab_file, name):
+    def __init__(self, vocab_file, name, max_size):
         self.name = name
         self.word2index = {}
-        self.index2word = {0: "PAD", 1:"SOS", 2: "EOS" ,3 : "UNK" }
+        self.index2word = {0: "[PAD]", 1: "[SOS]", 2: "[EOS]", 3: "[UNK]" }
         self.n_words = 4  # Count SOS and EOS
         self.oovs = []
         
@@ -140,7 +80,7 @@ class Vocab:
                 self.word2index[w] = self.n_words
                 self.index2word[self.n_words] = w
                 self.n_words += 1
-                if vocab_size != 0 and self.n_words >= vocab_size:
+                if max_size != 0 and self.n_words >= max_size:
                      break
             
     def ArticleToindex(self , article):
