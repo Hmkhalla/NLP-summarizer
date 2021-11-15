@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from util import config
+from util import config, data
 import torch.nn.functional as F
 
 
@@ -10,8 +10,10 @@ from train_util import get_cuda
 
 
 class EncoderRNN(nn.Module):
-    def __init__(self, input_size=None, emb_dim=None, hidden_dim=None):
+    def __init__(self, embedding, emb_dim=None, hidden_dim=None):
         super(EncoderRNN, self).__init__()
+
+        self.embedding = embedding
         ### TO DO ###
         ### Make it more robust ###
         self.hidden_dim = hidden_dim if hidden_dim !=None else config.hidden_dim
@@ -20,7 +22,7 @@ class EncoderRNN(nn.Module):
 
         self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=1, batch_first=True, bidirectional=True)
 
-    def forward(self, embedded):
+    def forward(self, input):
         ''' Perform word embedding and forward rnn
         :param input: word_id in sequence (batch_size, max_enc_steps)
         :param embedded: word_vectors (batch_size, max_enc_steps, emb_dim)
@@ -28,6 +30,8 @@ class EncoderRNN(nn.Module):
         :returns h_enc_seq: hidden encoding states for all sentence (batch_size, max_enc_steps, 2*hidden_dim)
         :returns hidden : Tuple containing final hidden state & cell state of encoder. Shape of h & c: (batch_size, 2*hidden_dim)
         '''
+
+        embedded = self.embedding(input)
         h_enc_seq, hidden = self.lstm(embedded)
 
         h, c = hidden  # shape of h: 2, bs, n_hid
@@ -116,13 +120,14 @@ class TokenGeneration(nn.Module):
         self.lin_u = nn.Linear(3*2*config.hidden_dim, 1)
 
 
-    def forward(self, h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab):
+    def forward(self, h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab, extra_zeros):
         ''' Perform TOKEN GENERATION AND POINTER
         :param h_d_t: decoder hidden state at current time step (batch_size, 2*hidden_dim)
         :param ct_e: encoder context vector for decoding_step (eq 5 in https://arxiv.org/pdf/1705.04304.pdf) (batch_size, 2*hidden_dim)
         :param ct_d: decoder context vector for decoding_step (batch_size, 2*hidden_dim)
         :param alphat_e: normalized encoder attention score (batch_size, max_enc_steps)
-        :param enc_batch_extend_vocab: Input batch that stores OOV ids (batch_size, max_enc_steps)
+        :param enc_batch_extend_vocab: Input batch that stores word ids including OOVs meaning going
+        from 0 to vocab_size+n for n OOVs(batch_size, max_enc_steps)
 
         :returns final_dist: final output distribution including OOV (batch_size, vocab_size + max OOV_nb)
         '''
@@ -136,19 +141,22 @@ class TokenGeneration(nn.Module):
         attn_dist = alphat_e
         attn_dist = (1 - p_u) * attn_dist
 
-        ## TO DO adding OOVs in final_dist
+        # pointer mechanism (as suggested in eq 9 https://arxiv.org/pdf/1704.04368.pdf)
+        if extra_zeros is not None:
+            vocab_dist = torch.cat([vocab_dist, extra_zeros], dim=1)
         final_dist = vocab_dist.scatter_add(1, enc_batch_extend_vocab, attn_dist)
 
         return final_dist
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self):
+    def __init__(self, embedding):
         super(DecoderRNN, self).__init__()
-
+        self.embedding = embedding
         self.lstm = nn.LSTMCell(config.emb_dim, 2*config.hidden_dim, batch_first=True)
 
-    def forward(self, embedded, h_enc):
+    def forward(self, input, h_enc):
+        embedded = self.embedding(input)
         h_d_t, cell_t = self.lstm(embedded, h_enc)
         return h_d_t, cell_t
 
@@ -157,8 +165,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.embedding = nn.Embedding(config.vocab_size, config.emb_dim)
-        self.encoder = EncoderRNN()
-        self.decoder = DecoderRNN()
+        self.encoder = EncoderRNN(self.embedding)
+        self.decoder = DecoderRNN(self.embedding)
         self.enc_attention = IntraTemporalAttention()
         self.dec_attention = IntraDecoderAttention()
         self.token_gen = TokenGeneration()
