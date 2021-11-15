@@ -133,3 +133,19 @@ class Train(object):
                 self.save_model(iter)
 
         pbar.close()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train_mle', type=str, default="yes")
+    parser.add_argument('--train_rl', type=str, default="no")
+    parser.add_argument('--mle_weight', type=float, default=1.0)
+    parser.add_argument('--load_model', type=str, default=None)
+    parser.add_argument('--new_lr', type=float, default=None)
+    opt = parser.parse_args()
+    opt.rl_weight = 1 - opt.mle_weight
+    print("Training mle: %s, Training rl: %s, mle weight: %.2f, rl weight: %.2f"%(opt.train_mle, opt.train_rl, opt.mle_weight, opt.rl_weight))
+    print("intra_encoder:", config.intra_encoder, "intra_decoder:", config.intra_decoder)
+
+    train_processor = Train(opt)
+    train_processor.trainIters()
+
