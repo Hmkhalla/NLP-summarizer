@@ -2,6 +2,7 @@ import os
 #os.environ["CUDA_VISIBLE_DEVICES"] = "0"    #Set cuda device
 
 import time
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -102,8 +103,10 @@ class Train(object):
 
 
     def trainIters(self):
+        start = time.time()
         iter = self.setup_train()
         count = mle_total = 0
+        pbar = tqdm(total = config.max_iterations+1)
         while iter <= config.max_iterations:
             batch = self.batcher.next_batch()
             try:
@@ -115,11 +118,18 @@ class Train(object):
             mle_total += mle_loss
             count += 1
             iter += 1
+            pbar.update(1)
+            #pbar.set_description(f"Epoch [{epoch}/{num_epochs}]")
+            pbar.set_postfix(avg_loss=mle_total / count)
 
             if iter % 1000 == 0:
                 mle_avg = mle_total / count
-                print("iter:", iter, "mle_loss:", "%.3f" % mle_avg)
+                print('iter: %d %s  mle_loss: %.4f' % (iter, timeSince(start, iter / config.max_iterations), mle_avg))
+                #print("iter:", iter, "mle_loss:", "%.3f" % mle_avg)
+
                 count = mle_total = 0
 
             if iter % 5000 == 0:
                 self.save_model(iter)
+
+        pbar.close()

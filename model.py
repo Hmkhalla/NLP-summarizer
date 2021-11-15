@@ -5,7 +5,7 @@ from util import config, data
 import torch.nn.functional as F
 
 
-from train_util import get_cuda
+from util.train_util import get_cuda
 
 
 
