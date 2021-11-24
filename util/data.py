@@ -52,8 +52,8 @@ def collate_batch(batch, voc_):
         article = dic['article']
         resume = dic['highlights']
 
-        input_enc, enc_batch_extend_vocab, oovs = article_pipeline(article, voc_)
-        input_dec, target_dec, oovs = resume_pipeline(resume, voc_, oovs)
+        input_enc, enc_batch_extend_vocab, oovs = article_pipeline(article, voc_, tokenizer)
+        input_dec, target_dec, oovs = resume_pipeline(resume, voc_, tokenizer, oovs)
 
         enc_inputs_lengths[i] = min(config.max_enc_steps, len(input_enc))
         dec_inputs_lengths[i] = min(config.max_dec_steps, len(input_dec))
