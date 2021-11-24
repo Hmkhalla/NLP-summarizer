@@ -78,7 +78,7 @@ def collate_batch(batch, voc_):
     inputs_dec = torch.from_numpy(
         pad_sequences(inputs_dec, maxlen=config.max_dec_steps, value=voc_['[PAD]'], padding='post', truncating='post', dtype='int64'))
     targets_dec = torch.from_numpy(
-        pad_sequences(targets_dec, maxlen=config.max_dec_steps, padding='post', truncating='post', value=voc_['[PAD]']))
+        pad_sequences(targets_dec, maxlen=config.max_dec_steps, padding='post', truncating='post', value=voc_['[PAD]'], dtype='int64'))
 
     enc_inputs_lengths = torch.tensor(enc_inputs_lengths, dtype=torch.int32)
     dec_inputs_lengths = torch.tensor(dec_inputs_lengths, dtype=torch.int32)
