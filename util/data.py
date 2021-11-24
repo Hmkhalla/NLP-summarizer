@@ -73,10 +73,10 @@ def collate_batch(batch, voc_):
 
     inputs_enc = torch.from_numpy(pad_sequences(inputs_enc, maxlen=config.max_enc_steps, value=voc_['[PAD]']))
     encs_batch_extend_vocab = torch.from_numpy(
-        pad_sequences(encs_batch_extend_vocab, maxlen=config.max_enc_steps, value=voc_['[PAD]']))
+        pad_sequences(encs_batch_extend_vocab, maxlen=config.max_enc_steps, value=voc_['[PAD]'], dtype='int64'))
 
     inputs_dec = torch.from_numpy(
-        pad_sequences(inputs_dec, maxlen=config.max_dec_steps, value=voc_['[PAD]'], padding='post', truncating='post'))
+        pad_sequences(inputs_dec, maxlen=config.max_dec_steps, value=voc_['[PAD]'], padding='post', truncating='post', dtype='int64'))
     targets_dec = torch.from_numpy(
         pad_sequences(targets_dec, maxlen=config.max_dec_steps, padding='post', truncating='post', value=voc_['[PAD]']))
 
