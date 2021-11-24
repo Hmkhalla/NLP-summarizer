@@ -3,7 +3,7 @@ import errno
 from collections import OrderedDict
 from tqdm import tqdm
 
-from util.data import get_tokenizer
+from torchtext.data.utils import get_tokenizer
 
 import torchtext
 from torchtext.vocab import build_vocab_from_iterator, vocab
@@ -12,7 +12,7 @@ from torchtext.vocab.vocab import Vocab
 
 
 def yield_tokens(data_iter):
-  tokenizer = get_tokenizer()
+  tokenizer = get_tokenizer('basic_english')
   for data in tqdm(data_iter, desc=f"Tokenizing"):
     article = data['article']
     resume = data['highlights']

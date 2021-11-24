@@ -7,8 +7,8 @@ import torch
 
 tokenizer = get_tokenizer('basic_english')
 
-def get_tokernier():
-    return tokenizer
+#def get_tokenizer():
+#    return tokenizer
 
 def sentence2ids(sentence, voc, tokenizer, oovs=None):
     oovs_ = oovs if oovs != None else {}
