@@ -60,7 +60,7 @@ class IntraTemporalAttention(nn.Module):
         # attn_score = self.W_e(h_d_t.unsqueeze(1).expand_as(h_enc), h_enc)
         attn_score = get_cuda(torch.zeros((config.batch_size, config.max_enc_steps), dtype=torch.float))
         for i in range(config.max_enc_steps):
-            attn_score[i] = self.W_e(h_d_t, h_enc[:, i, :])
+            attn_score[:, i] = self.W_e(h_d_t, h_enc[:, i, :]).view(-1)
 
         exp_att = torch.exp(attn_score)
         if sum_exp_att is None:
@@ -104,7 +104,7 @@ class IntraDecoderAttention(nn.Module):
             #attn_score = self.W_d(h_d_t.unsqueeze(1).expand_as(prev_h_dec).contiguous(), prev_h_dec).squeeze(2)
             attn_score = get_cuda(torch.zeros(prev_h_dec.size()[:-1], dtype=torch.float))
             for i in range(attn_score.size()[-1]):
-                attn_score[i] = self.W_e(h_d_t, prev_h_dec[:, i, :])
+                attn_score[:, i] = self.W_e(h_d_t, prev_h_dec[:, i, :]).view(-1)
 
             alpha_t = F.softmax(attn_score, dim=1)  # bs, t-1
             ct_d = torch.bmm(alpha_t.unsqueeze(1), prev_h_dec).squeeze(1)  # bs, n_hid
