@@ -43,7 +43,7 @@ class Train(object):
         }, save_path)
 
     def setup_train(self):
-        self.model = Model()
+        self.model = Model(self.start_id, self.unk_id, self.pad_id)
         self.model = get_cuda(self.model)
         self.trainer = torch.optim.Adam(self.model.parameters(), lr=config.lr)
         start_iter = 0

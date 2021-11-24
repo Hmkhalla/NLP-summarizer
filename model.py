@@ -153,7 +153,7 @@ class DecoderRNN(nn.Module):
     def __init__(self, embedding):
         super(DecoderRNN, self).__init__()
         self.embedding = embedding
-        self.lstm = nn.LSTMCell(config.emb_dim, 2*config.hidden_dim, batch_first=True)
+        self.lstm = nn.LSTMCell(config.emb_dim, 2*config.hidden_dim)
 
     def forward(self, input, h_enc):
         embedded = self.embedding(input)
@@ -161,7 +161,7 @@ class DecoderRNN(nn.Module):
         return h_d_t, cell_t
 
 class Model(nn.Module):
-    def __init__(self):
+    def __init__(self, start_id, unk_id, pad_id):
         super(Model, self).__init__()
 
         self.embedding = nn.Embedding(config.vocab_size, config.emb_dim)
@@ -171,9 +171,9 @@ class Model(nn.Module):
         self.dec_attention = IntraDecoderAttention()
         self.token_gen = TokenGeneration()
 
-        self.start_id = self.vocab.word2id(data.START_DECODING)
-        self.unk_id = self.vocab.word2id(data.UNKNOWN_TOKEN)
-        self.pad_id = self.vocab.word2id(data.PAD_TOKEN)
+        self.start_id = start_id
+        self.unk_id = unk_id
+        self.pad_id = pad_id
 
     def forward(self, input):
         input_embedded = self.embedding(input)
