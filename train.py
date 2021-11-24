@@ -138,7 +138,12 @@ class Train(object):
             loss = 0
             for i, batch in pbar:
                 prepare_time = start_time - time.time()
-                mle_loss = self.train_batch_MLE(batch)
+
+                self.trainer.zero_grad()
+                mle_loss = self.train_batch_MLE(batch).backward()
+                self.trainer.step()
+                mle_loss = mle_loss.detach().item()
+
                 process_time = start_time - time.time() - prepare_time
 
                 pbar.set_description("Compute efficiency: {:.2f}, epoch: {}/{}:".format(
