@@ -1,22 +1,20 @@
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"] = "0"    #Set cuda device
 
-import time
 from tqdm import tqdm
 
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from model import Model
 
-from util import config, data
-#from util.batcher import Batcher
-from util.data import Vocab
+from util import config
+from util.data import collate_batch, article_pipeline, resume_pipeline
+from datasets import load_dataset
+import util.vocab as vocab
+from util.vocab import Vocabulary
 from util.train_util import *
-from torch.distributions import Categorical
-from rouge import Rouge
 from numpy import random
 import argparse
+import wandb
 
 random.seed(123)
 torch.manual_seed(123)
@@ -25,12 +23,15 @@ if torch.cuda.is_available():
 
 class Train(object):
     def __init__(self, opt):
-        self.vocab = Vocab(config.vocab_path, config.vocab_size)
+
+
         self.opt = opt
-        self.start_id = self.vocab.word2id(data.START_DECODING)
-        self.end_id = self.vocab.word2id(data.STOP_DECODING)
-        self.pad_id = self.vocab.word2id(data.PAD_TOKEN)
-        self.unk_id = self.vocab.word2id(data.UNKNOWN_TOKEN)
+        self.dataset = load_dataset('cnn_dailymail', '3.0.0')
+        self.vocab = Vocabulary(self.dataset['train'])
+        self.start_id = self.vocab[vocab.START_DECODING]
+        self.end_id = self.vocab[vocab.STOP_DECODING]
+        self.pad_id = self.vocab[vocab.PAD_TOKEN]
+        self.unk_id = self.vocab[vocab.UNKNOWN_TOKEN]
         time.sleep(5)
 
     def save_model(self, iter):
@@ -55,6 +56,8 @@ class Train(object):
             print("Loaded model at " + load_model_path)
         if self.opt.new_lr is not None:
             self.trainer = torch.optim.Adam(self.model.parameters(), lr=self.opt.new_lr)
+
+        wandb.watch(self.model)
         return start_iter
 
     def train_batch_MLE(self, batch):
@@ -67,8 +70,10 @@ class Train(object):
         '''
 
         step_losses = []
-        input_enc, enc_padding_mask, enc_batch_extend_vocab, extra_zeros, ct_e = batch.get_enc_data()
-        input_dec, max_dec_len, dec_lens, target_dec = batch.get_dec_data()
+        enc_data, dec_data = batch
+        input_enc, enc_padding_mask, enc_batch_extend_vocab, extra_zeros = enc_data
+        input_dec, dec_lens, target_dec = dec_data
+        max_dec_len = dec_lens.max()
 
         h_enc, hidden_e = self.model.encoder(input_enc)
         sum_exp_att = None
@@ -77,8 +82,8 @@ class Train(object):
         hidden_d_t = hidden_e
         for t in range(min(max_dec_len, config.max_dec_steps)):
 
-            #use_gound_truth = get_cuda((torch.rand(len(h_enc)) > 0.25)).long()
-            #x_t = use_gound_truth * input_dec[:, t] + (1 - use_gound_truth) * x_t
+            use_gound_truth = get_cuda((torch.rand(len(h_enc)) > 0.25)).long()
+            x_t = use_gound_truth * input_dec[:, t] + (1 - use_gound_truth) * x_t
             x_t = input_dec[:, t]
 
             h_d_t, cell_t = self.model.decoder(x_t, hidden_d_t)
@@ -91,10 +96,10 @@ class Train(object):
             step_loss = F.nll_loss(log_probs, target, reduction="none", ignore_index=self.pad_id)
             step_losses.append(step_loss)
 
-            #x_t = torch.multinomial(final_dist, 1).squeeze()
-            topv, topi = final_dist.topk(1)
-            is_oov = (topi >= config.vocab_size).long()  # Mask indicating whether sampled word is OOV
-            x_t = (1 - is_oov) * topi.detach() + (is_oov) * self.unk_id  # Replace OOVs with [UNK] token
+            x_t = torch.multinomial(final_dist, 1).squeeze()
+            #topv, topi = final_dist.topk(1)
+            is_oov = (x_t >= config.vocab_size).long()  # Mask indicating whether sampled word is OOV
+            x_t = (1 - is_oov) * x_t.detach() + (is_oov) * self.unk_id  # Replace OOVs with [UNK] token
 
         losses = torch.sum(torch.stack(step_losses, 1), 1)  # unnormalized losses for each example in the batch; (batch_size)
         batch_avg_loss = losses / dec_lens  # Normalized losses; (batch_size)
@@ -103,36 +108,52 @@ class Train(object):
 
 
     def trainIters(self):
-        start = time.time()
+
         iter = self.setup_train()
-        count = mle_total = 0
-        pbar = tqdm(total = config.max_iterations+1)
-        while iter <= config.max_iterations:
-            batch = self.batcher.next_batch()
-            try:
-                mle_loss = self.train_batch_MLE(batch, iter)
-            except KeyboardInterrupt:
-                print("-------------------Keyboard Interrupt------------------")
-                exit(0)
 
-            mle_total += mle_loss
-            count += 1
-            iter += 1
-            pbar.update(1)
-            #pbar.set_description(f"Epoch [{epoch}/{num_epochs}]")
-            pbar.set_postfix(avg_loss=mle_total / count)
+        process_batch = lambda batch : collate_batch(batch, self.vocab)
 
-            if iter % 1000 == 0:
-                mle_avg = mle_total / count
-                print('iter: %d %s  mle_loss: %.4f' % (iter, timeSince(start, iter / config.max_iterations), mle_avg))
-                #print("iter:", iter, "mle_loss:", "%.3f" % mle_avg)
+        train_dataset = self.dataset['train']
+        train_data_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=process_batch)
+        val_dataset = self.dataset['validation']
+        val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=process_batch)
 
-                count = mle_total = 0
+        #history = {}  # Collects per-epoch loss and acc like Keras' fit().
+        #history['loss'] = []
+        #history['val_loss'] = []
+        #history['acc'] = []
+        #history['val_acc'] = []
 
-            if iter % 5000 == 0:
-                self.save_model(iter)
+        start = time.time()
 
-        pbar.close()
+        # now we start the main loop
+        start_epoch = iter
+        for epoch in range(start_epoch, config.max_epochs+1):
+            # set models to train mode
+            self.model.train()
+
+            # use prefetch_generator and tqdm for iterating through data
+            pbar = tqdm(enumerate(train_data_loader), total=len(train_data_loader))
+            start_time = time.time()
+            loss = 0
+            for i, batch in pbar:
+                prepare_time = start_time - time.time()
+                mle_loss = self.train_batch_MLE(batch)
+                process_time = start_time - time.time() - prepare_time
+
+                pbar.set_description("Compute efficiency: {:.2f}, epoch: {}/{}:".format(
+                    process_time / (process_time + prepare_time), epoch, config.max_epochs))
+                pbar.set_postfix(train_loss=mle_loss)
+                loss += mle_loss
+                start_time = time.time()
+
+                wandb.log(mle_loss)
+
+            #history['loss'].append(loss/len(train_data_loader))
+            #history['val_loss'].append(val_loss)
+            if epoch % 10 == 0:
+                self.save_model(epoch)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -146,6 +167,10 @@ if __name__ == "__main__":
     print("Training mle: %s, Training rl: %s, mle weight: %.2f, rl weight: %.2f"%(opt.train_mle, opt.train_rl, opt.mle_weight, opt.rl_weight))
     print("intra_encoder:", config.intra_encoder, "intra_decoder:", config.intra_decoder)
 
+    wandb.init(project="nlp-project")
+    wandb.config = {"learning_rate": config.lr, "epochs": config.max_epochs, "batch_size": config.batch_size, "hidden_dim" : config.hidden_dim,
+                    "emb_dim" : config.emb_dim, "max_enc_setps" : config.max_enc_steps,
+                    "max_dec_setps" : config.max_dec_steps, "input_vocab_size" : config.vocab_size, "output_vocab_size" : config.vocab_size}
     train_processor = Train(opt)
     train_processor.trainIters()
 
