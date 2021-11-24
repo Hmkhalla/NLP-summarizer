@@ -71,7 +71,7 @@ class Train(object):
 
         step_losses = []
         enc_data, dec_data = batch
-        input_enc, enc_padding_mask, enc_batch_extend_vocab, extra_zeros = enc_data
+        input_enc, input_enc_length, enc_padding_mask, enc_batch_extend_vocab, extra_zeros = enc_data
         input_dec, dec_lens, target_dec = dec_data
         max_dec_len = dec_lens.max()
 
