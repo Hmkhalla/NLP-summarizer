@@ -20,7 +20,7 @@ rand_unif_init_mag = 0.02
 trunc_norm_init_std = 1e-4
 
 eps = 1e-12
-max_iterations = 500000
+max_epochs = 5000
 
 
 save_model_path = "data/saved_models"
