@@ -1,8 +1,14 @@
 from torch.utils.data import DataLoader
 from keras.preprocessing.sequence import pad_sequences
+from torchtext.data.utils import get_tokenizer
 from util import config
 import torch
 
+
+tokenizer = get_tokenizer('basic_english')
+
+def get_tokernier():
+    return tokenizer
 
 def sentence2ids(sentence, voc, tokenizer, oovs=None):
     oovs_ = oovs if oovs != None else {}
@@ -46,8 +52,8 @@ def collate_batch(batch, voc_):
         article = dic['article']
         resume = dic['highlights']
 
-        input_enc, enc_batch_extend_vocab, oovs = article_pipeline(article)
-        input_dec, target_dec, oovs = resume_pipeline(resume, oovs)
+        input_enc, enc_batch_extend_vocab, oovs = article_pipeline(article, voc_)
+        input_dec, target_dec, oovs = resume_pipeline(resume, voc_, oovs)
 
         enc_inputs_lengths[i] = min(config.max_enc_steps, len(input_enc))
         dec_inputs_lengths[i] = min(config.max_dec_steps, len(input_dec))
