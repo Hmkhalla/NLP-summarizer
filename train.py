@@ -27,7 +27,7 @@ class Train(object):
 
         self.opt = opt
         self.dataset = load_dataset('cnn_dailymail', '3.0.0')
-        self.vocab = Vocabulary(self.dataset['train'])
+        self.vocab = Vocabulary(self.dataset['train'], vocab_size=config.vocab_size)
         self.start_id = self.vocab[vocab.START_DECODING]
         self.end_id = self.vocab[vocab.STOP_DECODING]
         self.pad_id = self.vocab[vocab.PAD_TOKEN]
