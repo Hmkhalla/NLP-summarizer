@@ -19,3 +19,14 @@ def asMinutes(s):
     m = math.floor(s / 60)
     s -= m * 60
     return '%dm %ds' % (m, s)
+
+def count_parameters(model):
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad: continue
+        param = parameter.numel()
+        print(f'{name} -------- {param}')
+        total_params+=param
+    print()
+    print(f"Total Trainable Params: {total_params}")
+    return total_params

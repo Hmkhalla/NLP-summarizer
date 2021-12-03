@@ -58,6 +58,8 @@ class Train(object):
             self.trainer = torch.optim.Adam(self.model.parameters(), lr=self.opt.new_lr)
 
         wandb.watch(self.model)
+        params = count_parameters(self.model)
+
         return start_iter
 
     def train_batch_MLE(self, batch):
@@ -84,7 +86,7 @@ class Train(object):
 
             use_gound_truth = get_cuda((torch.rand(len(h_enc)) > 0.25)).long()
             x_t = use_gound_truth * input_dec[:, t] + (1 - use_gound_truth) * x_t
-            x_t = input_dec[:, t]
+            #x_t = input_dec[:, t]
 
             h_d_t, cell_t = self.model.decoder(x_t, hidden_d_t)
             ct_e, alphat_e, sum_exp_att = self.model.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
@@ -97,7 +99,6 @@ class Train(object):
             step_losses.append(step_loss)
 
             x_t = torch.multinomial(final_dist, 1).squeeze()
-            #topv, topi = final_dist.topk(1)
             is_oov = (x_t >= config.vocab_size).long()  # Mask indicating whether sampled word is OOV
             x_t = (1 - is_oov) * x_t.detach() + (is_oov) * self.unk_id  # Replace OOVs with [UNK] token
 
@@ -118,11 +119,6 @@ class Train(object):
         val_dataset = self.dataset['validation']
         val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=process_batch)
 
-        #history = {}  # Collects per-epoch loss and acc like Keras' fit().
-        #history['loss'] = []
-        #history['val_loss'] = []
-        #history['acc'] = []
-        #history['val_acc'] = []
 
         start = time.time()
 
@@ -140,7 +136,8 @@ class Train(object):
                 prepare_time = start_time - time.time()
 
                 self.trainer.zero_grad()
-                mle_loss = self.train_batch_MLE(batch).backward()
+                mle_loss = self.train_batch_MLE(batch)
+                mle_loss.backward()
                 self.trainer.step()
                 mle_loss = mle_loss.detach().item()
 
@@ -152,7 +149,7 @@ class Train(object):
                 loss += mle_loss
                 start_time = time.time()
 
-                wandb.log(mle_loss)
+            wandb.log({"mle_loss": loss})
 
             #history['loss'].append(loss/len(train_data_loader))
             #history['val_loss'].append(val_loss)

@@ -38,6 +38,7 @@ class Vocabulary(Vocab):
         print(f'Loading vocabulary from {save_path} .......')
         with open(save_path, "r") as f:
           tokens = f.read().splitlines()[:vocab_size]
+        print('Succesfuly loaded')
       else:
         voc = build_vocab_from_iterator(yield_tokens(dataset), specials=[START_DECODING, STOP_DECODING, PAD_TOKEN, UNKNOWN_TOKEN], special_first=True)
         tokens = voc.get_itos()[:vocab_size]
