@@ -7,7 +7,26 @@ import torch.nn.functional as F
 
 from util.train_util import get_cuda
 
+def init_lstm_wt(lstm):
+    for name, _ in lstm.named_parameters():
+        if 'weight' in name:
+            wt = getattr(lstm, name)
+            wt.data.uniform_(-config.rand_unif_init_mag, config.rand_unif_init_mag)
+        elif 'bias' in name:
+            # set forget bias to 1
+            bias = getattr(lstm, name)
+            n = bias.size(0)
+            start, end = n // 4, n // 2
+            bias.data.fill_(0.)
+            bias.data[start:end].fill_(1.)
 
+def init_linear_wt(linear):
+    linear.weight.data.normal_(std=config.trunc_norm_init_std)
+    if linear.bias is not None:
+        linear.bias.data.normal_(std=config.trunc_norm_init_std)
+
+def init_wt_normal(wt):
+    wt.data.normal_(std=config.trunc_norm_init_std)
 
 class EncoderRNN(nn.Module):
     def __init__(self, embedding, emb_dim=None, hidden_dim=None):
@@ -21,6 +40,7 @@ class EncoderRNN(nn.Module):
         ### END TO DO ###
 
         self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=1, batch_first=True, bidirectional=True)
+        init_lstm_wt(self.lstm)
 
     def forward(self, input):
         ''' Perform word embedding and forward rnn
@@ -44,6 +64,7 @@ class IntraTemporalAttention(nn.Module):
     def __init__(self):
         super(IntraTemporalAttention, self).__init__()
         self.W_e = nn.Bilinear(2*config.hidden_dim, 2*config.hidden_dim, config.attn_dim, bias=False)
+        init_linear_wt(self.W_e)
 
     def forward(self, h_d_t, h_enc, enc_padding_mask, sum_exp_att = None):
         ''' Perform INTRA-TEMPORAL ATTENTION ON INPUT SEQUENCE
@@ -87,6 +108,7 @@ class IntraDecoderAttention(nn.Module):
     def __init__(self):
         super(IntraDecoderAttention, self).__init__()
         self.W_d = nn.Bilinear(2*config.hidden_dim, 2*config.hidden_dim, config.attn_dim, bias=False)
+        init_linear_wt(self.W_d)
 
     def forward(self, h_d_t, prev_h_dec):
         ''' Perform INTRA-DECODER ATTENTION
@@ -118,6 +140,8 @@ class TokenGeneration(nn.Module):
         # TO DO share weigths #
         self.lin_out = nn.Linear(3*2*config.hidden_dim, config.vocab_size)
         self.lin_u = nn.Linear(3*2*config.hidden_dim, 1)
+        init_linear_wt(self.lin_out)
+        init_linear_wt(self.lin_u)
 
 
     def forward(self, h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab, extra_zeros):
@@ -154,6 +178,7 @@ class DecoderRNN(nn.Module):
         super(DecoderRNN, self).__init__()
         self.embedding = embedding
         self.lstm = nn.LSTMCell(config.emb_dim, 2*config.hidden_dim)
+        init_lstm_wt(self.lstm)
 
     def forward(self, input, h_enc):
         embedded = self.embedding(input)
@@ -165,6 +190,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.embedding = nn.Embedding(config.vocab_size, config.emb_dim)
+        init_wt_normal(self.embedding)
         self.encoder = EncoderRNN(self.embedding)
         self.decoder = DecoderRNN(self.embedding)
         self.enc_attention = IntraTemporalAttention()
