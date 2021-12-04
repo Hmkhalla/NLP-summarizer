@@ -1,4 +1,4 @@
-device = "cuda" if torch.cuda.is_available() else "cpu"from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader
 from keras.preprocessing.sequence import pad_sequences
 from torchtext.data.utils import get_tokenizer
 from util import config
