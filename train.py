@@ -21,6 +21,8 @@ torch.manual_seed(123)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(123)
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 class Train(object):
     def __init__(self, opt):
 
@@ -44,7 +46,7 @@ class Train(object):
 
     def setup_train(self):
         self.model = Model(self.start_id, self.unk_id, self.pad_id)
-        self.model = get_cuda(self.model)
+        self.model = self.model.to(device)
         self.trainer = torch.optim.Adam(self.model.parameters(), lr=config.lr)
         start_iter = 0
         if self.opt.load_model is not None:
@@ -80,11 +82,13 @@ class Train(object):
         h_enc, hidden_e = self.model.encoder(input_enc)
         sum_exp_att = None
         prev_h_dec = None
-        x_t = get_cuda(torch.LongTensor(len(h_enc)).fill_(self.start_id))
+        x_t = torch.cuda.FloatTensor(len(h_enc)) if torch.cuda.is_available() else torch.float(len(h_enc))
+        x_t.fill_(self.start_id)
+        #x_t = torch.zeros(len(h_enc), device=device, dtype=torch.long).fill_(self.start_id)
         hidden_d_t = hidden_e
         for t in range(min(max_dec_len, config.max_dec_steps)):
 
-            use_gound_truth = get_cuda((torch.rand(len(h_enc)) > 0.25)).long()
+            use_gound_truth = (torch.rand(len(h_enc), device=device) > 0.25).long()
             x_t = use_gound_truth * input_dec[:, t] + (1 - use_gound_truth) * x_t
             #x_t = input_dec[:, t]
 

@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader
+device = "cuda" if torch.cuda.is_available() else "cpu"from torch.utils.data import DataLoader
 from keras.preprocessing.sequence import pad_sequences
 from torchtext.data.utils import get_tokenizer
 from util import config
@@ -6,6 +6,7 @@ import torch
 
 
 tokenizer = get_tokenizer('basic_english')
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 #def get_tokenizer():
 #    return tokenizer
@@ -80,12 +81,12 @@ def collate_batch(batch, voc_):
     targets_dec = torch.from_numpy(
         pad_sequences(targets_dec, maxlen=config.max_dec_steps, padding='post', truncating='post', value=voc_['[PAD]'], dtype='int64'))
 
-    enc_inputs_lengths = torch.tensor(enc_inputs_lengths, dtype=torch.int32)
-    dec_inputs_lengths = torch.tensor(dec_inputs_lengths, dtype=torch.int32)
+    enc_inputs_lengths = torch.tensor(enc_inputs_lengths, dtype=torch.int32, device=device)
+    dec_inputs_lengths = torch.tensor(dec_inputs_lengths, dtype=torch.int32, device=device)
 
     encs_padding_mask = inputs_enc.ne(voc_['[PAD]'])
 
-    extra_zeros = torch.zeros(batch_len, extra_zeros)
+    extra_zeros = torch.zeros(batch_len, extra_zeros, device=device)
 
     return (inputs_enc.to(device), enc_inputs_lengths.to(device), encs_padding_mask.to(device),
             encs_batch_extend_vocab.to(device), extra_zeros.to(device)), (

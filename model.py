@@ -5,7 +5,7 @@ from util import config, data
 import torch.nn.functional as F
 
 
-from util.train_util import get_cuda
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def init_lstm_wt(lstm):
     for name, _ in lstm.named_parameters():
@@ -79,13 +79,14 @@ class IntraTemporalAttention(nn.Module):
         '''
 
         # attn_score = self.W_e(h_d_t.unsqueeze(1).expand_as(h_enc), h_enc)
-        attn_score = get_cuda(torch.zeros((config.batch_size, config.max_enc_steps), dtype=torch.float))
+        attn_score = torch.cuda.FloatTensor((config.batch_size, config.max_enc_steps)) if torch.cuda.is_available() else torch.float((config.batch_size, config.max_enc_steps))
         for i in range(config.max_enc_steps):
             attn_score[:, i] = self.W_e(h_d_t, h_enc[:, i, :]).view(-1)
 
         exp_att = torch.exp(attn_score)
         if sum_exp_att is None:
-            sum_exp_att = get_cuda(torch.FloatTensor(exp_att.size()).fill_(1e-10)) + exp_att
+            sum_exp_att = torch.cuda.FloatTensor(exp_att.size()) if torch.cuda.is_available() else torch.float(exp_att.size())
+            sum_exp_att = sum_exp_att.fill_(1e-10) + exp_att
         else:
             temp = exp_att
             exp_att = exp_att / sum_exp_att
@@ -120,11 +121,12 @@ class IntraDecoderAttention(nn.Module):
         '''
         if prev_h_dec is None :
             prev_h_dec = h_d_t.unsqueeze(1)
-            ct_d = get_cuda(torch.zeros(h_d_t.size()))
+            ct_d = torch.zeros(h_d_t.size(), device=device)
         else :
             # TO DO find other way than contigous #
             #attn_score = self.W_d(h_d_t.unsqueeze(1).expand_as(prev_h_dec).contiguous(), prev_h_dec).squeeze(2)
-            attn_score = get_cuda(torch.zeros(prev_h_dec.size()[:-1], dtype=torch.float))
+            attn_score = torch.cuda.FloatTensor(prev_h_dec.size()[:-1]) if torch.cuda.is_available() else torch.float(prev_h_dec.size()[:-1])
+            #attn_score = torch.zeros(prev_h_dec.size()[:-1], dtype=torch.float, device=device)
             for i in range(attn_score.size()[-1]):
                 attn_score[:, i] = self.W_d(h_d_t, prev_h_dec[:, i, :]).view(-1)
 
@@ -190,7 +192,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.embedding = nn.Embedding(config.vocab_size, config.emb_dim)
-        init_wt_normal(self.embedding)
+        init_wt_normal(self.embedding.weight)
         self.encoder = EncoderRNN(self.embedding)
         self.decoder = DecoderRNN(self.embedding)
         self.enc_attention = IntraTemporalAttention()
@@ -206,7 +208,7 @@ class Model(nn.Module):
         h_enc, hidden_e = self.encoder(input_embedded)
         output_embedded = self.embedding(self.start_id)
         hidden_d = hidden_e
-        enc_padding_mask = get_cuda(torch.ones_like(input_embedded))
+        enc_padding_mask = torch.ones_like(input_embedded, device=device)
         enc_padding_mask[input_embedded==self.pad_id] = 0
         sum_exp_att = None
         prev_h_dec = None
