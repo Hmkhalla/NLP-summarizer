@@ -1,3 +1,4 @@
+
 from torch.utils.data import DataLoader
 from keras.preprocessing.sequence import pad_sequences
 from torchtext.data.utils import get_tokenizer
@@ -50,8 +51,8 @@ def collate_batch(batch, voc_):
     inputs_dec, dec_inputs_lengths, targets_dec = [None] * batch_len, [None] * batch_len, [None] * batch_len
 
     for (i, dic) in enumerate(batch):
-        article = dic['article']
-        resume = dic['highlights']
+        article = dic['document']
+        resume = dic['summary']
 
         input_enc, enc_batch_extend_vocab, oovs = article_pipeline(article, voc_, tokenizer)
         input_dec, target_dec, oovs = resume_pipeline(resume, voc_, tokenizer, oovs)

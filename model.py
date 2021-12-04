@@ -78,8 +78,9 @@ class IntraTemporalAttention(nn.Module):
         :returns sum_exp_att: actualised summation of attention weights from decoder time steps (batch_size, max_enc_steps)
         '''
 
-        # attn_score = self.W_e(h_d_t.unsqueeze(1).expand_as(h_enc), h_enc)
-        attn_score = torch.cuda.FloatTensor((config.batch_size, config.max_enc_steps)) if torch.cuda.is_available() else torch.float((config.batch_size, config.max_enc_steps))
+        #attn_score = self.W_e(h_d_t.unsqueeze(1).expand_as(h_enc), h_enc)
+        #attn_score = torch.cuda.FloatTensor((config.batch_size, config.max_enc_steps)) if torch.cuda.is_available() else torch.float((config.batch_size, config.max_enc_steps))
+        attn_score = torch.zeros((config.batch_size, config.max_enc_steps), dtype=torch.float).cuda()
         for i in range(config.max_enc_steps):
             attn_score[:, i] = self.W_e(h_d_t, h_enc[:, i, :]).view(-1)
 

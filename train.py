@@ -28,8 +28,8 @@ class Train(object):
 
 
         self.opt = opt
-        self.dataset = load_dataset('cnn_dailymail', '3.0.0')
-        self.vocab = Vocabulary(self.dataset['train'], vocab_size=config.vocab_size)
+        self.dataset = load_dataset('gigaword')
+        self.vocab = Vocabulary(self.dataset['train'].select(range(config.datasize)), vocab_size=config.vocab_size)
         self.start_id = self.vocab[vocab.START_DECODING]
         self.end_id = self.vocab[vocab.STOP_DECODING]
         self.pad_id = self.vocab[vocab.PAD_TOKEN]
@@ -82,7 +82,7 @@ class Train(object):
         h_enc, hidden_e = self.model.encoder(input_enc)
         sum_exp_att = None
         prev_h_dec = None
-        x_t = torch.cuda.FloatTensor(len(h_enc)) if torch.cuda.is_available() else torch.float(len(h_enc))
+        x_t = torch.cuda.LongTensor(len(h_enc)) if torch.cuda.is_available() else torch.float(len(h_enc))
         x_t.fill_(self.start_id)
         #x_t = torch.zeros(len(h_enc), device=device, dtype=torch.long).fill_(self.start_id)
         hidden_d_t = hidden_e
@@ -118,7 +118,7 @@ class Train(object):
 
         process_batch = lambda batch : collate_batch(batch, self.vocab)
 
-        train_dataset = self.dataset['train']
+        train_dataset = self.dataset['train'].select(range(config.datasize))
         train_data_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=process_batch)
         val_dataset = self.dataset['validation']
         val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=True, collate_fn=process_batch)
@@ -140,6 +140,7 @@ class Train(object):
                 prepare_time = start_time - time.time()
 
                 self.trainer.zero_grad()
+
                 mle_loss = self.train_batch_MLE(batch)
                 mle_loss.backward()
                 self.trainer.step()

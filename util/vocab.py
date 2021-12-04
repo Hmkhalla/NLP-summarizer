@@ -14,8 +14,8 @@ from torchtext.vocab.vocab import Vocab
 def yield_tokens(data_iter):
   tokenizer = get_tokenizer('basic_english')
   for data in tqdm(data_iter, desc=f"Tokenizing"):
-    article = data['article']
-    resume = data['highlights']
+    article = data['document']
+    resume = data['summary']
     yield tokenizer(article)
     yield tokenizer(resume)
 
