@@ -205,7 +205,7 @@ class Model(nn.Module):
         self.pad_id = pad_id
 
     def forward(self, batch):
-        enc_data, _ = batch
+        enc_data, _, _ = batch
         input_enc, input_enc_length, enc_padding_mask, enc_batch_extend_vocab, extra_zeros = enc_data
 
         h_enc, hidden_e = self.model.encoder(input_enc)
