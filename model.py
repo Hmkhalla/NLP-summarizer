@@ -218,9 +218,9 @@ class Model(nn.Module):
 
         hidden_d_t = hidden_e
         for t in range(config.max_dec_steps):
-            h_d_t, cell_t = self.model.decoder(resume[:,t], hidden_d_t)
-            ct_e, alphat_e, sum_exp_att = self.model.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
-            ct_d, prev_h_dec = self.model.dec_attention(h_d_t, prev_h_dec)
-            final_dist = self.model.token_gen(h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab, extra_zeros)
+            h_d_t, cell_t = self.decoder(resume[:,t], hidden_d_t)
+            ct_e, alphat_e, sum_exp_att = self.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
+            ct_d, prev_h_dec = self.dec_attention(h_d_t, prev_h_dec)
+            final_dist = self.token_gen(h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab, extra_zeros)
             resume[:,t] = torch.argmax(final_dist, dim=1)
         return resume
