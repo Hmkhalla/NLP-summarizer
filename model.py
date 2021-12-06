@@ -204,21 +204,23 @@ class Model(nn.Module):
         self.unk_id = unk_id
         self.pad_id = pad_id
 
-    def forward(self, input):
-        input_embedded = self.embedding(input)
-        h_enc, hidden_e = self.encoder(input_embedded)
-        output_embedded = self.embedding(self.start_id)
-        hidden_d = hidden_e
-        enc_padding_mask = torch.ones_like(input_embedded, device=device)
-        enc_padding_mask[input_embedded==self.pad_id] = 0
+    def forward(self, batch):
+        enc_data, _ = batch
+        input_enc, input_enc_length, enc_padding_mask, enc_batch_extend_vocab, extra_zeros = enc_data
+
+        h_enc, hidden_e = self.model.encoder(input_enc)
         sum_exp_att = None
         prev_h_dec = None
-        resume = torch.zeros(config.batch_size, config.max_dec_steps)
+
+        resume = torch.cuda.LongTensor(config.batch_size, config.max_dec_steps) if torch.cuda.is_available() else torch.float(config.batch_size, config.max_dec_steps)
+        resume.fill_(self.pad_id)
+        resume[:, 0] = self.start_id
+
+        hidden_d_t = hidden_e
         for t in range(config.max_dec_steps):
-            h_d_t, cell_d_t = self.decoder(output_embedded, hidden_d)
-            ct_e, alphat_e, sum_exp_att = self.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
-            ct_d, prev_h_dec = self.dec_attention(h_d_t, prev_h_dec)
-            final_dist = self.token_gen(h_d_t, ct_e, ct_d, alphat_e, input_embedded)
-            # TO DO ID generation #
-            # resume[:, t] = ...
+            h_d_t, cell_t = self.model.decoder(resume[:,t], hidden_d_t)
+            ct_e, alphat_e, sum_exp_att = self.model.enc_attention(h_d_t, h_enc, enc_padding_mask, sum_exp_att)
+            ct_d, prev_h_dec = self.model.dec_attention(h_d_t, prev_h_dec)
+            final_dist = self.model.token_gen(h_d_t, ct_e, ct_d, alphat_e, enc_batch_extend_vocab, extra_zeros)
+            resume[:,t] = torch.argmax(final_dist, dim=1)
         return resume

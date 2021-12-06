@@ -91,4 +91,4 @@ def collate_batch(batch, voc_):
 
     return (inputs_enc.to(device), enc_inputs_lengths.to(device), encs_padding_mask.to(device),
             encs_batch_extend_vocab.to(device), extra_zeros.to(device)), (
-           inputs_dec.to(device), dec_inputs_lengths.to(device), targets_dec.to(device))
+           inputs_dec.to(device), dec_inputs_lengths.to(device), targets_dec.to(device)), oovs
